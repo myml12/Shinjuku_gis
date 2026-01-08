@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新宿駅構内マップ - deck.gl + MapLibre GL JS</title>
+    <script src='https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@4.0.0/dist/maplibre-gl.css' rel='stylesheet' />
+    <script src="https://unpkg.com/deck.gl@9.0.28/dist.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <!-- コントロールパネル -->
+    <div class="control-panel">
+        <h3>コントロール</h3>
+
+        <!-- 階層選択 -->
+        <div class="control-section">
+            <label>表示階層:</label>
+            <select id="floor-select">
+                <option value="all">全階層</option>
+                <option value="1">1F</option>
+                <option value="B1">B1</option>
+                <option value="B2">B2</option>
+                <option value="B3">B3</option>
+                <option value="B5">B5</option>
+                <option value="B6">B6</option>
+            </select>
+        </div>
+
+        <!-- 3D表示制御 -->
+        <div class="control-section">
+            <label>3D表示:</label>
+            <div class="layer-controls">
+                <label><input type="checkbox" id="3d-toggle" checked> 3D表示を有効化</label>
+            </div>
+            <div style="margin-top: 8px;">
+                <label>ピッチ角度: <span id="pitch-value">75</span>°</label>
+                <input type="range" id="pitch-slider" min="0" max="85" value="75" style="width: 100%;">
+            </div>
+            <div style="margin-top: 8px;">
+                <label>方位角: <span id="bearing-value">45</span>°</label>
+                <input type="range" id="bearing-slider" min="0" max="360" value="45" style="width: 100%;">
+            </div>
+            <div style="margin-top: 8px; display: flex; gap: 5px;">
+                <button id="view-top" style="flex: 1; padding: 4px; font-size: 11px;">上から</button>
+                <button id="view-side" style="flex: 1; padding: 4px; font-size: 11px;">横から</button>
+                <button id="view-reset" style="flex: 1; padding: 4px; font-size: 11px;">リセット</button>
+            </div>
+        </div>
+
+        <!-- レイヤー表示切り替え -->
+        <div class="control-section">
+            <label>レイヤー表示:</label>
+            <div class="layer-controls">
+                <label><input type="checkbox" id="layer-floor" checked> Floor</label>
+                <label><input type="checkbox" id="layer-space" checked> Space</label>
+                <label><input type="checkbox" id="layer-facility" checked> Facility</label>
+                <label><input type="checkbox" id="layer-link" checked> Link</label>
+                <label><input type="checkbox" id="layer-node" checked> Node</label>
+            </div>
+        </div>
+
+        <!-- 経路探索 -->
+        <div class="control-section">
+            <label>経路探索:</label>
+            <div class="route-controls">
+                <button id="route-start-btn">出発点を選択</button>
+                <button id="route-end-btn">到着点を選択</button>
+                <button id="route-clear-btn">クリア</button>
+            </div>
+            <div id="route-status"></div>
+        </div>
+
+        <!-- 選択ノード情報 -->
+        <div class="control-section" id="node-info-section" style="display: none;">
+            <h4>選択ノード情報</h4>
+            <div id="node-info"></div>
+        </div>
+    </div>
+
+    <!-- ローディング表示 -->
+    <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <div>データを読み込んでいます...</div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
