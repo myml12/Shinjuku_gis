@@ -80,7 +80,7 @@ async function loadAllData() {
             throw new Error(`node.geojsonの読み込みに失敗しました: ${nodesResponse.status} ${nodesResponse.statusText}`);
         }
         const nodesData = await nodesResponse.json();
-        
+
         const linksResponse = await fetch('link.geojson');
         if (!linksResponse.ok) {
             throw new Error(`link.geojsonの読み込みに失敗しました: ${linksResponse.status} ${linksResponse.statusText}`);
@@ -89,65 +89,79 @@ async function loadAllData() {
 
         allData.nodes = nodesData;
         allData.links = linksData;
-        
+
         console.log('ノード数:', nodesData.features.length);
         console.log('リンク数:', linksData.features.length);
 
         // 階層別ファイルの読み込み
         const floors = ['1', 'B1', 'B2', 'B3', 'B5', 'B6'];
         const filePromises = [];
+        const loadedFiles = [];
+        const failedFiles = [];
 
         floors.forEach(floor => {
+            // Floorファイル
             filePromises.push(
                 fetch(`Shinjuku_${floor}_Floor.geojson`)
                     .then(r => {
                         if (!r.ok) {
+                            failedFiles.push(`Shinjuku_${floor}_Floor.geojson`);
                             console.warn(`Shinjuku_${floor}_Floor.geojsonが見つかりません`);
                             return { type: 'FeatureCollection', features: [] };
                         }
+                        loadedFiles.push(`Shinjuku_${floor}_Floor.geojson`);
                         return r.json();
                     })
                     .then(data => {
                         allData.floors[floor] = data;
-                        console.log(`${floor}階 Floor:`, data.features.length, 'features');
+                        console.log(`✓ ${floor}階 Floor:`, data.features.length, 'features');
                     })
                     .catch(err => {
+                        failedFiles.push(`Shinjuku_${floor}_Floor.geojson`);
                         console.warn(`Shinjuku_${floor}_Floor.geojsonの読み込みエラー:`, err);
                         allData.floors[floor] = { type: 'FeatureCollection', features: [] };
                     })
             );
+            // Spaceファイル
             filePromises.push(
                 fetch(`Shinjuku_${floor}_Space.geojson`)
                     .then(r => {
                         if (!r.ok) {
+                            failedFiles.push(`Shinjuku_${floor}_Space.geojson`);
                             console.warn(`Shinjuku_${floor}_Space.geojsonが見つかりません`);
                             return { type: 'FeatureCollection', features: [] };
                         }
+                        loadedFiles.push(`Shinjuku_${floor}_Space.geojson`);
                         return r.json();
                     })
                     .then(data => {
                         allData.spaces[floor] = data;
-                        console.log(`${floor}階 Space:`, data.features.length, 'features');
+                        console.log(`✓ ${floor}階 Space:`, data.features.length, 'features');
                     })
                     .catch(err => {
+                        failedFiles.push(`Shinjuku_${floor}_Space.geojson`);
                         console.warn(`Shinjuku_${floor}_Space.geojsonの読み込みエラー:`, err);
                         allData.spaces[floor] = { type: 'FeatureCollection', features: [] };
                     })
             );
+            // Facilityファイル
             filePromises.push(
                 fetch(`Shinjuku_${floor}_Facility.geojson`)
                     .then(r => {
                         if (!r.ok) {
+                            failedFiles.push(`Shinjuku_${floor}_Facility.geojson`);
                             console.warn(`Shinjuku_${floor}_Facility.geojsonが見つかりません`);
                             return { type: 'FeatureCollection', features: [] };
                         }
+                        loadedFiles.push(`Shinjuku_${floor}_Facility.geojson`);
                         return r.json();
                     })
                     .then(data => {
                         allData.facilities[floor] = data;
-                        console.log(`${floor}階 Facility:`, data.features.length, 'features');
+                        console.log(`✓ ${floor}階 Facility:`, data.features.length, 'features');
                     })
                     .catch(err => {
+                        failedFiles.push(`Shinjuku_${floor}_Facility.geojson`);
                         console.warn(`Shinjuku_${floor}_Facility.geojsonの読み込みエラー:`, err);
                         allData.facilities[floor] = { type: 'FeatureCollection', features: [] };
                     })
@@ -155,6 +169,15 @@ async function loadAllData() {
         });
 
         await Promise.all(filePromises);
+
+        // 読み込み結果のサマリーを表示
+        console.log('\n=== ファイル読み込み結果 ===');
+        console.log(`読み込み成功: ${loadedFiles.length}ファイル`);
+        console.log(`読み込み失敗: ${failedFiles.length}ファイル`);
+        if (failedFiles.length > 0) {
+            console.warn('失敗したファイル:', failedFiles);
+        }
+        console.log('===========================\n');
 
         // グラフ構築
         buildGraph();
@@ -253,14 +276,14 @@ function buildGraph() {
 // ノードクリックイベントの設定関数
 function setupNodeClickEvents() {
     const floors = ['1', 'B1', 'B2', 'B3', 'B5', 'B6'];
-    
+
     floors.forEach(floor => {
         if (map.getLayer(`node-layer-${floor}`)) {
             map.on('click', `node-layer-${floor}`, (e) => {
                 const feature = e.features[0];
                 const nodeId = feature.properties.node_id;
                 selectNode(nodeId);
-                
+
                 if (routeMode === 'start') {
                     routeStartNode = nodeId;
                     routeMode = null;
@@ -273,31 +296,31 @@ function setupNodeClickEvents() {
                     updateRouteStatus('到着点を選択しました: ' + nodeId.substring(0, 8) + '...');
                     document.getElementById('route-end-btn').classList.remove('active');
                     updateRouteNodes();
-                    
+
                     if (routeStartNode && routeEndNode) {
                         findRoute(routeStartNode, routeEndNode);
                     }
                 }
             });
-            
+
             // マウスオーバーでカーソル変更
             map.on('mouseenter', `node-layer-${floor}`, () => {
                 map.getCanvas().style.cursor = 'pointer';
             });
-            
+
             map.on('mouseleave', `node-layer-${floor}`, () => {
                 map.getCanvas().style.cursor = '';
             });
         }
     });
-    
+
     // その他のノードレイヤーにもイベントを追加
     if (map.getLayer('node-layer-other')) {
         map.on('click', 'node-layer-other', (e) => {
             const feature = e.features[0];
             const nodeId = feature.properties.node_id;
             selectNode(nodeId);
-            
+
             if (routeMode === 'start') {
                 routeStartNode = nodeId;
                 routeMode = null;
@@ -310,17 +333,17 @@ function setupNodeClickEvents() {
                 updateRouteStatus('到着点を選択しました: ' + nodeId.substring(0, 8) + '...');
                 document.getElementById('route-end-btn').classList.remove('active');
                 updateRouteNodes();
-                
+
                 if (routeStartNode && routeEndNode) {
                     findRoute(routeStartNode, routeEndNode);
                 }
             }
         });
-        
+
         map.on('mouseenter', 'node-layer-other', () => {
             map.getCanvas().style.cursor = 'pointer';
         });
-        
+
         map.on('mouseleave', 'node-layer-other', () => {
             map.getCanvas().style.cursor = '';
         });
@@ -631,8 +654,6 @@ function initDeckGL() {
         console.warn('deck.gl is not loaded - deck.glなしで続行します');
         return;
     }
-    
-    try {
 
     // MapLibre GL JSのカスタムレイヤーとしてdeck.glを追加
     class DeckGLLayer {
@@ -653,7 +674,7 @@ function initDeckGL() {
                     this.deckgl = null;
                     return;
                 }
-                
+
                 const center = map.getCenter();
                 // deck.gl v9のAPIを使用
                 // MapLibre GL JSのWebGLコンテキストを直接使用
@@ -682,7 +703,7 @@ function initDeckGL() {
 
         render(gl, matrix) {
             if (!this.deckgl) return;
-            
+
             try {
                 const center = this.map.getCenter();
                 const viewState = {
@@ -690,9 +711,13 @@ function initDeckGL() {
                     latitude: center.lat,
                     zoom: this.map.getZoom(),
                     pitch: this.map.getPitch(),
-                    bearing: this.map.getBearing()
+                    bearing: this.map.getBearing(),
+                    // 3D表示のための設定
+                    near: 0.1,
+                    far: 10000,
+                    altitude: 1.5
                 };
-                
+
                 // deck.gl v9のAPIを使用してレイヤーを更新
                 if (this.deckgl && typeof this.deckgl.setProps === 'function') {
                     this.deckgl.setProps({
@@ -711,12 +736,12 @@ function initDeckGL() {
             }
         }
     }
-    
+
     try {
         const layer = new DeckGLLayer();
         map.addLayer(layer);
         deckgl = layer.deckgl;
-        
+
         // 初期レイヤーを追加
         updateDeckLayers();
         console.log('deck.glの初期化が完了しました');
@@ -732,73 +757,224 @@ function updateDeckLayers() {
         // deck.glが初期化されていない場合はスキップ
         return;
     }
-    
+
     try {
         const layers = [];
         const floors = ['1', 'B1', 'B2', 'B3', 'B5', 'B6'];
 
-    // Floorレイヤー（3D Polygon）
-    floors.forEach(floor => {
-        if (allData.floors[floor] && allData.floors[floor].features.length > 0) {
-            const elevation = Math.abs(floorMapping[floor]) * 3;
-            const floorData = allData.floors[floor].features.map(feature => ({
-                ...feature,
-                properties: {
-                    ...feature.properties,
-                    elevation: elevation
-                }
-            }));
-
-            layers.push(new deck.PolygonLayer({
-                id: `deck-floor-${floor}`,
-                data: floorData,
-                getPolygon: d => d.geometry.coordinates[0],
-                getElevation: d => d.properties.elevation || 0,
-                getFillColor: [224, 224, 224, 150],
-                getLineColor: [200, 200, 200, 200],
-                lineWidthMinPixels: 1,
-                extruded: true,
-                wireframe: false,
-                pickable: false
-            }));
-        }
-    });
-
-    // Spaceレイヤー（3D Polygon）
-    floors.forEach(floor => {
-        if (allData.spaces[floor] && allData.spaces[floor].features.length > 0) {
-            const elevation = Math.abs(floorMapping[floor]) * 3;
-            const spaceData = allData.spaces[floor].features.map(feature => {
-                const category = feature.properties.category || '';
-                let color = [211, 211, 211, 120];
-
-                if (category === 'B001') color = [255, 107, 107, 150];
-                else if (category === 'B002') color = [78, 205, 196, 150];
-                else if (category === 'B021') color = [255, 217, 61, 150];
-                else if (category === 'B022') color = [107, 203, 119, 150];
-                else if (category === 'B029') color = [232, 232, 232, 150];
-
-                return {
+        // Floorレイヤー（3D Polygon - 立体表示）
+        floors.forEach(floor => {
+            if (allData.floors[floor] && allData.floors[floor].features.length > 0) {
+                const elevation = Math.abs(floorMapping[floor]) * 3;
+                const floorThickness = 0.3; // フロアの厚み（メートル）
+                const floorData = allData.floors[floor].features.map(feature => ({
                     ...feature,
                     properties: {
                         ...feature.properties,
                         elevation: elevation,
+                        thickness: floorThickness
+                    }
+                }));
+
+                layers.push(new deck.PolygonLayer({
+                    id: `deck-floor-${floor}`,
+                    data: floorData,
+                    getPolygon: d => d.geometry.coordinates[0],
+                    getElevation: d => (d.properties.elevation || 0),
+                    getFillColor: [224, 224, 224, 150],
+                    getLineColor: [200, 200, 200, 200],
+                    lineWidthMinPixels: 1,
+                    extruded: true,
+                    wireframe: false,
+                    pickable: false,
+                    // 立体表示のための設定
+                    material: {
+                        ambient: 0.5,
+                        diffuse: 0.6,
+                        shininess: 32,
+                        specularColor: [60, 60, 60]
+                    }
+                }));
+            }
+        });
+
+        // Spaceレイヤー（3D Polygon）
+        floors.forEach(floor => {
+            if (allData.spaces[floor] && allData.spaces[floor].features.length > 0) {
+                const elevation = Math.abs(floorMapping[floor]) * 3;
+                const spaceData = allData.spaces[floor].features.map(feature => {
+                    const category = feature.properties.category || '';
+                    let color = [211, 211, 211, 120];
+
+                    if (category === 'B001') color = [255, 107, 107, 150];
+                    else if (category === 'B002') color = [78, 205, 196, 150];
+                    else if (category === 'B021') color = [255, 217, 61, 150];
+                    else if (category === 'B022') color = [107, 203, 119, 150];
+                    else if (category === 'B029') color = [232, 232, 232, 150];
+
+                    return {
+                        ...feature,
+                        properties: {
+                            ...feature.properties,
+                            elevation: elevation,
+                            color: color
+                        }
+                    };
+                });
+
+                layers.push(new deck.PolygonLayer({
+                    id: `deck-space-${floor}`,
+                    data: spaceData,
+                    getPolygon: d => d.geometry.coordinates[0],
+                    getElevation: d => (d.properties.elevation || 0) + 0.1,
+                    getFillColor: d => d.properties.color || [211, 211, 211, 120],
+                    getLineColor: [150, 150, 150, 100],
+                    lineWidthMinPixels: 0.5,
+                    extruded: true,
+                    wireframe: false,
+                    pickable: true,
+                    // 立体表示のための設定
+                    material: {
+                        ambient: 0.5,
+                        diffuse: 0.6,
+                        shininess: 32,
+                        specularColor: [60, 60, 60]
+                    },
+                    onHover: info => {
+                        if (info.object) {
+                            map.getCanvas().style.cursor = 'pointer';
+                        } else {
+                            map.getCanvas().style.cursor = '';
+                        }
+                    }
+                }));
+            }
+        });
+
+        // Linkレイヤー（3D Line）
+        if (allData.links && allData.links.features.length > 0) {
+            const linkData = allData.links.features.map(link => {
+                const startId = link.properties.start_id;
+                const endId = link.properties.end_id;
+                const startNode = allData.nodes.features.find(n => n.properties.node_id === startId);
+                const endNode = allData.nodes.features.find(n => n.properties.node_id === endId);
+
+                const startFloor = startNode ? startNode.properties.floor : 0;
+                const endFloor = endNode ? endNode.properties.floor : 0;
+                const startElevation = Math.abs(startFloor) * 3;
+                const endElevation = Math.abs(endFloor) * 3;
+
+                const routeType = link.properties.route_type || '7';
+                let color = [135, 206, 235, 150];
+
+                if (routeType === '4') color = [107, 203, 119, 200];
+                else if (routeType === '5') color = [255, 217, 61, 200];
+                else if (routeType === '6') color = [77, 150, 255, 200];
+
+                return {
+                    ...link,
+                    properties: {
+                        ...link.properties,
+                        startElevation: startElevation,
+                        endElevation: endElevation,
                         color: color
                     }
                 };
             });
 
-            layers.push(new deck.PolygonLayer({
-                id: `deck-space-${floor}`,
-                data: spaceData,
-                getPolygon: d => d.geometry.coordinates[0],
-                getElevation: d => (d.properties.elevation || 0) + 0.1,
-                getFillColor: d => d.properties.color || [211, 211, 211, 120],
-                getLineColor: [150, 150, 150, 100],
-                lineWidthMinPixels: 0.5,
-                extruded: true,
-                wireframe: false,
+            layers.push(new deck.PathLayer({
+                id: 'deck-link',
+                data: linkData,
+                getPath: d => {
+                    // 3D座標に変換（各座標にelevationを追加）
+                    const coords = d.geometry.coordinates;
+                    const startElevation = d.properties.startElevation || 0;
+                    const endElevation = d.properties.endElevation || 0;
+                    // 開始点と終了点にelevationを追加
+                    if (coords.length >= 2) {
+                        return [
+                            [coords[0][0], coords[0][1], startElevation],
+                            [coords[coords.length - 1][0], coords[coords.length - 1][1], endElevation]
+                        ];
+                    }
+                    return coords.map(coord => [coord[0], coord[1], startElevation]);
+                },
+                getColor: d => d.properties.color || [135, 206, 235, 150],
+                getWidth: 2,
+                widthMinPixels: 1,
+                widthMaxPixels: 5,
+                widthUnits: 'meters',
+                coordinateSystem: deck.COORDINATE_SYSTEM.LNGLAT,
+                pickable: false,
+                billboard: false
+            }));
+        }
+
+        // Nodeレイヤー（3D Scatterplot）
+        if (allData.nodes && allData.nodes.features.length > 0) {
+            const nodeData = allData.nodes.features.map(node => {
+                // ノードの階層情報を取得（floorプロパティが存在することを確認）
+                const floorValue = node.properties.floor;
+                // floorが数値でない場合（undefined, null等）は0として扱う
+                const floor = (typeof floorValue === 'number' && !isNaN(floorValue)) ? floorValue : 0;
+                const elevation = Math.abs(floor) * 3;
+
+                return {
+                    ...node,
+                    position: [node.geometry.coordinates[0], node.geometry.coordinates[1], elevation],
+                    properties: {
+                        ...node.properties,
+                        floor: floor,
+                        elevation: elevation
+                    }
+                };
+            });
+
+            // デバッグ: 最初の10個のノードのelevationを確認
+            console.log('ノードのelevationサンプル（最初の10個）:');
+            nodeData.slice(0, 10).forEach((node, idx) => {
+                console.log(`  ノード${idx + 1}: floor=${node.properties.floor}, elevation=${node.position[2]}, position=[${node.position.join(', ')}]`);
+            });
+
+            layers.push(new deck.ScatterplotLayer({
+                id: 'deck-node',
+                data: nodeData,
+                getPosition: d => {
+                    // 3D座標を明示的に返す
+                    const pos = d.position || [d.geometry.coordinates[0], d.geometry.coordinates[1], d.properties.elevation || 0];
+                    return pos;
+                },
+                getFillColor: [0, 123, 255, 200],
+                getRadius: 3,
+                radiusMinPixels: 2,
+                radiusMaxPixels: 8,
+                radiusUnits: 'meters',
+                coordinateSystem: deck.COORDINATE_SYSTEM.LNGLAT,
                 pickable: true,
+                onClick: info => {
+                    if (info.object) {
+                        const nodeId = info.object.properties.node_id;
+                        selectNode(nodeId);
+
+                        if (routeMode === 'start') {
+                            routeStartNode = nodeId;
+                            routeMode = null;
+                            updateRouteStatus('出発点を選択しました: ' + nodeId.substring(0, 8) + '...');
+                            document.getElementById('route-start-btn').classList.remove('active');
+                            updateRouteNodes();
+                        } else if (routeMode === 'end') {
+                            routeEndNode = nodeId;
+                            routeMode = null;
+                            updateRouteStatus('到着点を選択しました: ' + nodeId.substring(0, 8) + '...');
+                            document.getElementById('route-end-btn').classList.remove('active');
+                            updateRouteNodes();
+
+                            if (routeStartNode && routeEndNode) {
+                                findRoute(routeStartNode, routeEndNode);
+                            }
+                        }
+                    }
+                },
                 onHover: info => {
                     if (info.object) {
                         map.getCanvas().style.cursor = 'pointer';
@@ -808,187 +984,104 @@ function updateDeckLayers() {
                 }
             }));
         }
-    });
 
-    // Linkレイヤー（3D Line）
-    if (allData.links && allData.links.features.length > 0) {
-        const linkData = allData.links.features.map(link => {
-            const startId = link.properties.start_id;
-            const endId = link.properties.end_id;
-            const startNode = allData.nodes.features.find(n => n.properties.node_id === startId);
-            const endNode = allData.nodes.features.find(n => n.properties.node_id === endId);
-
-            const startFloor = startNode ? startNode.properties.floor : 0;
-            const endFloor = endNode ? endNode.properties.floor : 0;
-            const startElevation = Math.abs(startFloor) * 3;
-            const endElevation = Math.abs(endFloor) * 3;
-
-            const routeType = link.properties.route_type || '7';
-            let color = [135, 206, 235, 150];
-
-            if (routeType === '4') color = [107, 203, 119, 200];
-            else if (routeType === '5') color = [255, 217, 61, 200];
-            else if (routeType === '6') color = [77, 150, 255, 200];
-
-            return {
-                ...link,
-                properties: {
-                    ...link.properties,
-                    startElevation: startElevation,
-                    endElevation: endElevation,
-                    color: color
-                }
-            };
-        });
-
-        layers.push(new deck.PathLayer({
-            id: 'deck-link',
-            data: linkData,
-            getPath: d => d.geometry.coordinates,
-            getColor: d => d.properties.color || [135, 206, 235, 150],
-            getWidth: 2,
-            widthMinPixels: 1,
-            widthMaxPixels: 5,
-            pickable: false,
-            billboard: false
-        }));
-    }
-
-    // Nodeレイヤー（3D Scatterplot）
-    if (allData.nodes && allData.nodes.features.length > 0) {
-        const nodeData = allData.nodes.features.map(node => {
-            const elevation = Math.abs(node.properties.floor) * 3;
-            return {
-                ...node,
-                position: [node.geometry.coordinates[0], node.geometry.coordinates[1], elevation],
-                properties: {
-                    ...node.properties,
-                    elevation: elevation
-                }
-            };
-        });
-
-        layers.push(new deck.ScatterplotLayer({
-            id: 'deck-node',
-            data: nodeData,
-            getPosition: d => d.position,
-            getFillColor: [0, 123, 255, 200],
-            getRadius: 3,
-            radiusMinPixels: 2,
-            radiusMaxPixels: 8,
-            pickable: true,
-            onClick: info => {
-                if (info.object) {
-                    const nodeId = info.object.properties.node_id;
-                    selectNode(nodeId);
-
-                    if (routeMode === 'start') {
-                        routeStartNode = nodeId;
-                        routeMode = null;
-                        updateRouteStatus('出発点を選択しました: ' + nodeId.substring(0, 8) + '...');
-                        document.getElementById('route-start-btn').classList.remove('active');
-                        updateRouteNodes();
-                    } else if (routeMode === 'end') {
-                        routeEndNode = nodeId;
-                        routeMode = null;
-                        updateRouteStatus('到着点を選択しました: ' + nodeId.substring(0, 8) + '...');
-                        document.getElementById('route-end-btn').classList.remove('active');
-                        updateRouteNodes();
-
-                        if (routeStartNode && routeEndNode) {
-                            findRoute(routeStartNode, routeEndNode);
-                        }
-                    }
-                }
-            },
-            onHover: info => {
-                if (info.object) {
-                    map.getCanvas().style.cursor = 'pointer';
-                } else {
-                    map.getCanvas().style.cursor = '';
-                }
+        // 選択ノードレイヤー
+        if (selectedNode) {
+            const node = allData.nodes.features.find(f => f.properties.node_id === selectedNode);
+            if (node) {
+                const floorValue = node.properties.floor;
+                const floor = (typeof floorValue === 'number' && !isNaN(floorValue)) ? floorValue : 0;
+                const elevation = Math.abs(floor) * 3;
+                layers.push(new deck.ScatterplotLayer({
+                    id: 'deck-selected-node',
+                    data: [{
+                        position: [node.geometry.coordinates[0], node.geometry.coordinates[1], elevation],
+                        properties: node.properties
+                    }],
+                    getPosition: d => d.position,
+                    getFillColor: [255, 0, 0, 255],
+                    getRadius: 8,
+                    radiusMinPixels: 6,
+                    radiusMaxPixels: 12,
+                    radiusUnits: 'meters',
+                    coordinateSystem: deck.COORDINATE_SYSTEM.LNGLAT,
+                    pickable: false
+                }));
             }
-        }));
-    }
-
-    // 選択ノードレイヤー
-    if (selectedNode) {
-        const node = allData.nodes.features.find(f => f.properties.node_id === selectedNode);
-        if (node) {
-            const elevation = Math.abs(node.properties.floor) * 3;
-            layers.push(new deck.ScatterplotLayer({
-                id: 'deck-selected-node',
-                data: [{
-                    position: [node.geometry.coordinates[0], node.geometry.coordinates[1], elevation],
-                    properties: node.properties
-                }],
-                getPosition: d => d.position,
-                getFillColor: [255, 0, 0, 255],
-                getRadius: 8,
-                radiusMinPixels: 6,
-                radiusMaxPixels: 12,
-                pickable: false
-            }));
         }
-    }
 
-    // 経路レイヤー
-    if (routeStartNode && routeEndNode) {
-        const startNode = allData.nodes.features.find(f => f.properties.node_id === routeStartNode);
-        const endNode = allData.nodes.features.find(f => f.properties.node_id === routeEndNode);
+        // 経路レイヤー
+        if (routeStartNode && routeEndNode) {
+            const startNode = allData.nodes.features.find(f => f.properties.node_id === routeStartNode);
+            const endNode = allData.nodes.features.find(f => f.properties.node_id === routeEndNode);
 
-        if (startNode && endNode) {
-            layers.push(new deck.ScatterplotLayer({
-                id: 'deck-route-nodes',
-                data: [
-                    {
-                        position: [startNode.geometry.coordinates[0], startNode.geometry.coordinates[1], Math.abs(startNode.properties.floor) * 3],
-                        properties: { type: 'start' }
-                    },
-                    {
-                        position: [endNode.geometry.coordinates[0], endNode.geometry.coordinates[1], Math.abs(endNode.properties.floor) * 3],
-                        properties: { type: 'end' }
+            if (startNode && endNode) {
+                const startFloorValue = startNode.properties.floor;
+                const startFloor = (typeof startFloorValue === 'number' && !isNaN(startFloorValue)) ? startFloorValue : 0;
+                const startElevation = Math.abs(startFloor) * 3;
+
+                const endFloorValue = endNode.properties.floor;
+                const endFloor = (typeof endFloorValue === 'number' && !isNaN(endFloorValue)) ? endFloorValue : 0;
+                const endElevation = Math.abs(endFloor) * 3;
+
+                layers.push(new deck.ScatterplotLayer({
+                    id: 'deck-route-nodes',
+                    data: [
+                        {
+                            position: [startNode.geometry.coordinates[0], startNode.geometry.coordinates[1], startElevation],
+                            properties: { type: 'start' }
+                        },
+                        {
+                            position: [endNode.geometry.coordinates[0], endNode.geometry.coordinates[1], endElevation],
+                            properties: { type: 'end' }
+                        }
+                    ],
+                    getPosition: d => d.position,
+                    getFillColor: d => d.properties.type === 'start' ? [0, 255, 0, 255] : [255, 0, 255, 255],
+                    getRadius: 10,
+                    radiusMinPixels: 8,
+                    radiusMaxPixels: 15,
+                    radiusUnits: 'meters',
+                    coordinateSystem: deck.COORDINATE_SYSTEM.LNGLAT,
+                    pickable: false
+                }));
+            }
+        }
+
+        // 経路線レイヤー（経路探索結果がある場合）
+        const routeSource = map.getSource('route-source');
+        if (routeSource && routeSource._data && routeSource._data.features.length > 0) {
+            const routeFeature = routeSource._data.features[0];
+            if (routeFeature.geometry.type === 'LineString') {
+                const routeCoordinates = routeFeature.geometry.coordinates.map(coord => {
+                    const node = allData.nodes.features.find(n =>
+                        Math.abs(n.geometry.coordinates[0] - coord[0]) < 0.0001 &&
+                        Math.abs(n.geometry.coordinates[1] - coord[1]) < 0.0001
+                    );
+                    if (node) {
+                        const floorValue = node.properties.floor;
+                        const floor = (typeof floorValue === 'number' && !isNaN(floorValue)) ? floorValue : 0;
+                        const elevation = Math.abs(floor) * 3;
+                        return [coord[0], coord[1], elevation];
                     }
-                ],
-                getPosition: d => d.position,
-                getFillColor: d => d.properties.type === 'start' ? [0, 255, 0, 255] : [255, 0, 255, 255],
-                getRadius: 10,
-                radiusMinPixels: 8,
-                radiusMaxPixels: 15,
-                pickable: false
-            }));
-        }
-    }
+                    return [coord[0], coord[1], 0];
+                });
 
-    // 経路線レイヤー（経路探索結果がある場合）
-    const routeSource = map.getSource('route-source');
-    if (routeSource && routeSource._data && routeSource._data.features.length > 0) {
-        const routeFeature = routeSource._data.features[0];
-        if (routeFeature.geometry.type === 'LineString') {
-            const routeCoordinates = routeFeature.geometry.coordinates.map(coord => {
-                const node = allData.nodes.features.find(n =>
-                    Math.abs(n.geometry.coordinates[0] - coord[0]) < 0.0001 &&
-                    Math.abs(n.geometry.coordinates[1] - coord[1]) < 0.0001
-                );
-                const elevation = node ? Math.abs(node.properties.floor) * 3 : 0;
-                return [coord[0], coord[1], elevation];
-            });
-
-            layers.push(new deck.PathLayer({
-                id: 'deck-route',
-                data: [{
-                    path: routeCoordinates,
-                    properties: { route: true }
-                }],
-                getPath: d => d.path,
-                getColor: [255, 0, 0, 255],
-                getWidth: 5,
-                widthMinPixels: 4,
-                widthMaxPixels: 8,
-                pickable: false
-            }));
+                layers.push(new deck.PathLayer({
+                    id: 'deck-route',
+                    data: [{
+                        path: routeCoordinates,
+                        properties: { route: true }
+                    }],
+                    getPath: d => d.path,
+                    getColor: [255, 0, 0, 255],
+                    getWidth: 5,
+                    widthMinPixels: 4,
+                    widthMaxPixels: 8,
+                    pickable: false
+                }));
+            }
         }
-    }
 
         deckLayers = layers;
     } catch (error) {
@@ -1197,7 +1290,9 @@ function displayRouteFromNodes(nodeIds) {
             console.warn('ノードが見つかりません:', nodeId);
             return null;
         }
-        const elevation = Math.abs(node.properties.floor) * 3;
+        const floorValue = node.properties.floor;
+        const floor = (typeof floorValue === 'number' && !isNaN(floorValue)) ? floorValue : 0;
+        const elevation = Math.abs(floor) * 3;
         return [node.geometry.coordinates[0], node.geometry.coordinates[1], elevation];
     }).filter(coord => coord !== null);
 
